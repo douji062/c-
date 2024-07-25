@@ -746,11 +746,6 @@ int main()
   	{
   		std::shared_ptr<Entity> e0;
   		{
-  			//std::unique_ptr<Entity> entity = std::make_unique<Entity>();//unique_ptr参数是explicit的，必须显式构造
-  			////如果构造函数抛出异常，会安全一些，因为不会得到一个没有引用的空指针，造成内存泄漏
-  			//entity->Print();
-  			////这个指针不能复制
-  
   			std::shared_ptr<Entity> sharedEntity = std::make_shared<Entity>();
   			//shared_ptr需要分配另一块内存称之为控制块，用来记录引用计数
   			e0 = sharedEntity;
@@ -772,11 +767,6 @@ int main()
   	{
   		std::weak_ptr<Entity> e0;
   		{
-  			//std::unique_ptr<Entity> entity = std::make_unique<Entity>();//unique_ptr参数是explicit的，必须显式构造
-  			////如果构造函数抛出异常，会安全一些，因为不会得到一个没有引用的空指针，造成内存泄漏
-  			//entity->Print();
-  			////这个指针不能复制
-  
   			std::shared_ptr<Entity> sharedEntity = std::make_shared<Entity>();
   			//shared_ptr需要分配另一块内存称之为控制块，用来记录引用计数
   			e0 = sharedEntity;
@@ -795,3 +785,149 @@ int main()
 ---
 
 ## 复制与拷贝构造函数
+
+```c++
+#include <iostream>
+
+struct Vector2
+{
+	float x, y;
+};
+
+
+
+int main()
+{
+	Vector2* a = new Vector2();
+	Vector2* b = a;//实际上a和b指向的是同一块内存地址
+	b->x = 2;//a和b中的x都被改变
+
+	//把一个引用赋值另一个引用时候只是改变指向，因为引用实际上只是别名
+	std::cin.get();
+}
+```
+
+**把一个引用赋值另一个引用时候只是改变指向，因为引用实际上只是别名**
+
+浅拷贝：
+
+```c++
+#include <iostream>
+
+class String
+{
+private:
+	char* m_Buffer;
+	unsigned int m_Size;
+public:
+	String(const char* string)
+	{
+		m_Size = strlen(string);
+		m_Buffer = new char[m_Size+1];
+		/*for (int i = 0; i < m_Size; i++) {
+			m_Buffer[i] = string[i];
+		}*/
+		memcpy(m_Buffer, string, m_Size+1);//拷贝目标，拷贝源，长度
+	}
+	~String()
+	{
+		delete[] m_Buffer;
+	}
+
+	friend std::ostream& operator<<(std::ostream& stream, const String& string);
+};
+
+
+std::ostream& operator<<(std::ostream& stream, const String& string)
+{
+	stream << string.m_Buffer;
+	return stream;
+}
+
+int main()
+{
+	String string = "Cherno";
+	String second = string;//实际上m_Buffer的内存地址对于两个string对象是相同的
+
+	std::cout << string << std::endl;
+	std::cout << second << std::endl;
+	std::cin.get();//所以析构函数被调用了两次，试图两次释放内存，所以程序崩溃
+}
+```
+
+我们应该做的是分配一个新的char数组来储存复制的字符串，而不是简单地复制指针，导致两个指向相同的内存缓冲区。（浅拷贝）
+
+所以我们希望第二个字符串应该有自己的指针，以拥有自己唯一的内存块。
+
+**深拷贝**
+
+**拷贝构造函数：**一种构造函数，当复制第二个字符串时，它会被调用
+
+```c++
+#include <iostream>
+
+class String
+{
+private:
+	char* m_Buffer;
+	unsigned int m_Size;
+public:
+	String(const char* string)
+	{
+		m_Size = strlen(string);
+		m_Buffer = new char[m_Size+1];
+		/*for (int i = 0; i < m_Size; i++) {
+			m_Buffer[i] = string[i];
+		}*/
+		memcpy(m_Buffer, string, m_Size+1);//拷贝目标，拷贝源，长度
+	}
+
+	String(const String& other)//拷贝构造函数
+		:m_Size(other.m_Size)//默认的拷贝构造函数中，m_Buffer是复制的地址
+	{
+		std::cout << "拷贝构造" << std::endl;
+		m_Buffer = new char[m_Size + 1];
+		memcpy(m_Buffer, other.m_Buffer, m_Size + 1);
+	}
+	~String()//析构函数
+	{
+		delete[] m_Buffer;
+	}
+
+	char& operator[](unsigned int index) 
+	{
+		return m_Buffer[index];
+	}
+
+	friend std::ostream& operator<<(std::ostream& stream, const String& string);
+};
+
+
+std::ostream& operator<<(std::ostream& stream, const String& string)
+{
+	stream << string.m_Buffer;
+	return stream;
+}
+
+void PrintString(const String& string)//always通过const去传递对象
+{
+	std::cout << string << std::endl;
+}
+
+int main()
+{
+	String string = "Cherno";
+	String second = string;//实际上m_Buffer的内存地址对于两个string对象是相同的
+
+	second[2] = 'a';
+
+	PrintString(string);
+	PrintString(second);
+	
+	std::cin.get();//所以析构函数被调用了两次，试图两次释放内存，所以程序崩溃
+}
+```
+
+**const引用传递可以减少拷贝**
+
+
