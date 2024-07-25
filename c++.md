@@ -677,3 +677,121 @@ int main()
 
 ## 智能指针
 
+当你用智能指针在heap上创建对象的时候，无需调用delete，甚至不需要new
+
+* unique_ptr
+
+  必须是唯一的，如果复制一个unique_ptr它们会指向同一个内存块，其中一个die，另一个会指向已经被释放的内存，所以它不能复制
+
+  ```c++
+  #include <iostream>
+  #include <memory>
+  
+  
+  class Entity
+  {
+  public:
+  	Entity()
+  	{
+  		std::cout << "创建" << std::endl;
+  	};
+  	~Entity()
+  	{
+  		std::cout << "销毁" << std::endl;
+  	};
+  	void Print(){}
+  };
+  
+  
+  int main()
+  {
+  	{
+  		std::unique_ptr<Entity> entity = std::make_unique<Entity>();//unique_ptr参数是explicit的，必须显式构造
+  		//如果构造函数抛出异常，会安全一些，因为不会得到一个没有引用的空指针，造成内存泄漏
+  		entity->Print();
+  		//这个指针不能复制
+  	}
+  	std::cin.get();
+  }
+  ```
+
+  
+
+* shared_ptr
+
+  使用引用计数。跟踪引用数目，一旦引用数目为0则被删除。
+
+  ```c++
+  #include <iostream>
+  #include <memory>
+  
+  
+  class Entity
+  {
+  public:
+  	Entity()
+  	{
+  		std::cout << "创建" << std::endl;
+  	};
+  	~Entity()
+  	{
+  		std::cout << "销毁" << std::endl;
+  	};
+  	void Print(){}
+  };
+  
+  
+  int main()
+  {
+  	{
+  		std::shared_ptr<Entity> e0;
+  		{
+  			//std::unique_ptr<Entity> entity = std::make_unique<Entity>();//unique_ptr参数是explicit的，必须显式构造
+  			////如果构造函数抛出异常，会安全一些，因为不会得到一个没有引用的空指针，造成内存泄漏
+  			//entity->Print();
+  			////这个指针不能复制
+  
+  			std::shared_ptr<Entity> sharedEntity = std::make_shared<Entity>();
+  			//shared_ptr需要分配另一块内存称之为控制块，用来记录引用计数
+  			e0 = sharedEntity;
+  		}
+  
+  	}
+  	//在这里销毁
+  	std::cin.get();
+  }
+  ```
+
+* weak_ptr
+
+  不会增加引用计数。但是它也不会让底层对象保持存活。
+
+  ```c++
+  int main()
+  {
+  	{
+  		std::weak_ptr<Entity> e0;
+  		{
+  			//std::unique_ptr<Entity> entity = std::make_unique<Entity>();//unique_ptr参数是explicit的，必须显式构造
+  			////如果构造函数抛出异常，会安全一些，因为不会得到一个没有引用的空指针，造成内存泄漏
+  			//entity->Print();
+  			////这个指针不能复制
+  
+  			std::shared_ptr<Entity> sharedEntity = std::make_shared<Entity>();
+  			//shared_ptr需要分配另一块内存称之为控制块，用来记录引用计数
+  			e0 = sharedEntity;
+  		}
+  //在这里就被销毁
+  	}
+  	
+  	std::cin.get();
+  }
+  ```
+
+  
+
+使用智能指针可以使内存管理自动化，防止内存泄漏。**尽量使用unique_ptr因为它有一个较低的开销**
+
+---
+
+## 复制与拷贝构造函数
