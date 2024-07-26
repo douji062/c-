@@ -861,7 +861,7 @@ int main()
 
 **深拷贝**
 
-拷贝构造函数：一种构造函数，当复制第二个字符串时，它会被调用
+**拷贝构造函数：**一种构造函数，当复制第二个字符串时，它会被调用
 
 ```c++
 #include <iostream>
@@ -917,17 +917,127 @@ void PrintString(const String& string)//always通过const去传递对象
 int main()
 {
 	String string = "Cherno";
-	String second = string;//实际上m_Buffer的内存地址对于两个string对象是相同的
+	String second = string;//调用了拷贝构造函数
 
 	second[2] = 'a';
 
 	PrintString(string);
 	PrintString(second);
 	
-	std::cin.get();//所以析构函数被调用了两次，试图两次释放内存，所以程序崩溃
+	std::cin.get();
 }
 ```
 
 **const引用传递可以减少拷贝**
 
+---
 
+## 箭头运算符
+
+* 最常见的使用方式：
+
+```c++
+#include <iostream>
+
+class Entity
+{
+public:
+	int x;
+public:
+	void Print()const
+	{
+		std::cout << "Hello" << std::endl;
+	}
+}; 
+
+
+int main()
+{
+	Entity e;
+	e.Print();
+	
+	Entity* ptr = &e;
+	//(*ptr).Print();
+	ptr->Print();//手动逆向引用的快捷方式
+	ptr->x = 2;
+
+	std::cin.get();
+}
+```
+
+* 你也可以重载并在自定义类中使用它：
+
+```c++
+#include <iostream>
+
+class Entity
+{
+public:
+	int x;
+public:
+	void Print()const
+	{
+		std::cout << "Hello" << std::endl;
+	}
+}; 
+class ScopePtr
+{
+private:
+	Entity* m_Obj;
+public:
+	ScopePtr(Entity* entity)
+		:m_Obj(entity) 
+	{
+
+	}
+	~ScopePtr()
+	{
+		delete m_Obj;
+	}
+
+	//Entity* GetObject() { return m_Obj; }
+
+	Entity* operator->() 
+	{
+		return m_Obj;
+	}
+
+	const Entity* operator->() const
+	{
+		return m_Obj;
+	}
+};
+
+int main()
+{
+	const ScopePtr entity = new Entity();
+	//entity.GetObject()->Print();//这种方式就需要调用方法再加箭头，所以我们选择重载操作符让它更加clear
+	entity->Print();
+
+	std::cin.get();
+}
+```
+
+可以在自己的类型中定义自己的构造函数，并实现自动化
+
+* 使用箭头操作符获取成员变量的偏移量
+
+```c++
+#include <iostream>
+struct Vector3
+{
+	float x, y, z;//在内存布局中把x的偏移量看成0
+};
+int main()
+{
+	int offset =(int) & ((Vector3*)0)->z;
+    //先把0或者nullptr化成Vector3形式的指针再指向需要查看偏移量的变量
+    //取地址并转换成int类型
+	std::cout << offset << std::endl;
+	std::cin.get();
+}
+```
+
+---
+
+C++动态数组
