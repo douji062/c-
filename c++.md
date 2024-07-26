@@ -762,6 +762,7 @@ int main()
   不会增加引用计数。但是它也不会让底层对象保持存活。
 
   ```c++
+  
   int main()
   {
   	{
@@ -1040,4 +1041,500 @@ int main()
 
 ---
 
-C++动态数组
+## C++动态数组(std::vector)
+
+如果创建一个更大的数组，他会在内存中创建一个比第一个更大的新数组，把所有东西复制到这里然后删除旧的那个
+
+动态数组是内存连续的数组
+
+在创建时< >尽量使用对象而不是指针（对象是连续分配而指针是随机分配）
+
+```c++
+#include <iostream>
+#include <vector>
+struct Vertex
+{
+	float x, y, z;//在内存布局中把x的偏移量看成0
+};
+
+std::ostream& operator<<(std::ostream& stream, const Vertex& vertex)
+{
+	stream << vertex.x << "," << vertex.y << "," << vertex.z;
+	return stream;
+}
+
+void Function(const std::vector<Vertex>& vertices) {//写函数时候保证是传引用的方式以防止复制
+
+}
+int main()
+{
+	std::vector<Vertex> vertices;//这是c++类模板所以不需要指定类类型，可以指定原始类型
+	vertices.push_back({ 1,2,3 });
+	vertices.push_back({ 4,5,6 });
+	Function(vertices);
+
+	/*for (int i = 0; i < vertices.size(); i++) {
+		std::cout << vertices[i] << std::endl;
+	}*/
+
+	for(Vertex& v:vertices)//如果不加&实际上是copy每个vertex到for循环中
+		std::cout << v << std::endl;
+
+	vertices.erase(vertices.begin()+1);//去掉第二个//需要一个迭代器作为index
+
+	for (int i = 0; i < vertices.size(); i++) {
+		std::cout << vertices[i] << std::endl;
+	}
+
+	std::cin.get();
+}
+```
+
+* std::vector的使用优化
+
+复制并重新分配是拖慢进程的主要因素。所以如何避免复制是优化程序的关键。
+
+优化前：
+
+```c++
+#include <iostream>
+#include <vector>
+struct Vertex
+{
+	float x, y, z;//在内存布局中把x的偏移量看成0
+
+	Vertex(float x, float y, float z)
+		:x(x),y(y),z(z)
+	{
+	}
+	Vertex(const Vertex& vertex)
+		:x(vertex.x), y(vertex.y), z(vertex.z)
+	{
+		std::cout << "Copied" << std::endl;
+	}
+
+};
+
+std::ostream& operator<<(std::ostream& stream, const Vertex& vertex)
+{
+	stream << vertex.x << "," << vertex.y << "," << vertex.z;
+	return stream;
+}
+
+int main()
+{
+	std::vector<Vertex> vertices;//这是c++类模板所以不需要指定类类型，可以指定原始类型
+	vertices.push_back(Vertex(1, 2, 3));//在main内部构造vertex对象，然后放入vector vertices中产生了一次复制
+	vertices.push_back(Vertex(4, 5, 6));
+	vertices.push_back(Vertex(7, 8, 9));//调整了三次大小1+2+3，所以优化策略是一开始分配足够三个对象的内存
+
+	//copy了六次
+	std::cin.get();
+}
+```
+
+优化后：
+
+优化思路，取消在main中构造vertex对象。并且一次性分配足够三个对象存储的内存防止多次修改再进行复制。
+
+```c++
+#include <iostream>
+#include <vector>
+struct Vertex
+{
+	float x, y, z;//在内存布局中把x的偏移量看成0
+
+	Vertex(float x, float y, float z)
+		:x(x),y(y),z(z)
+	{
+	}
+	Vertex(const Vertex& vertex)
+		:x(vertex.x), y(vertex.y), z(vertex.z)
+	{
+		std::cout << "Copied" << std::endl;
+	}
+
+};
+
+std::ostream& operator<<(std::ostream& stream, const Vertex& vertex)
+{
+	stream << vertex.x << "," << vertex.y << "," << vertex.z;
+	return stream;
+}
+
+int main()
+{
+	std::vector<Vertex> vertices;//这是c++类模板所以不需要指定类类型，可以指定原始类型
+	vertices.reserve(3);//reserve确保我们有足够的内存
+	vertices.emplace_back(1, 2, 3);//不是传递已经构造的vertex对象而是传递构造的参数列表，这样就可以直接在vector内存中构造
+	vertices.emplace_back(4, 5, 6);
+	vertices.emplace_back(7, 8, 9);
+
+	std::cin.get();
+}
+```
+
+
+
+---
+
+## C++中使用库(静态链接)
+
+在实际解决方案的实际项目文件中保留使用的库版本
+
+link with binary（GLFW库)
+
+下载库是32还是64位取决于目标程序
+
+C++创建一个动态链接库，编译后会生成两个可用的文件一个是lib文件一个是dll文件，那么这个lib文件是干嘛的呢？
+
+在使用动态库的时候，往往提供两个文件：一个引入库和一个DLL。引入库包含被DLL导出的函数和变量的符号名，DLL包含实际的函数和数据。在编译链接可执行文件时，只需要链接引入库，DLL中的函数代码和数据并不复制到可执行文件中，在运行的时候，再去加载DLL，访问DLL中导出的函数。
+
+1.  Load-time Dynamic Linking 载入时动态链接
+   这种用法的前提是在编译之前已经明确知道要调用DLL中的哪几个函数，编译时在目标文件中只保留必要的链接信息，而不含DLL函数的代码；当程序执行时，利用链接信息加载DLL函数代码并在内存中将其链接入调用程序的执行空间中，其主要目的是便于代码共享。
+2.  Run-time Dynamic Linking 运行时动态链接
+   这种方式是指在编译之前并不知道将会调用哪些DLL函数，完全是在运行过程中根据需要决定应调用哪个函数，并用LoadLibrary和GetProcAddress动态获得DLL函数的入口地址。
+
+头文件提供声明告诉我们哪些函数是可用的，库文件为我们提供定义，让我们可以链接到那些函数并在c++中正确调用
+
+添加外部依赖项
+
+```c++
+#include <iostream>
+#include "GLFW/glfw3.h"
+
+
+int main()
+{
+	int a = glfwInit();
+	std::cout << a << std::endl;
+	std::cin.get();
+}
+```
+
+---
+
+## 动态库
+
+动态链接是链接发生在运行时，静态链接是链接在编译时发生的。静态链接允许更多的优化发生。
+
+可执行文件实际上知道动态链接库的存在并需要，但是动态链接库仍然是一个单独的文件模块并在运行时加载。
+
+1.需要现场加载动态链接库，已经知道里面有什么函数并使用
+
+2.想任意加载这个动态库，在不知道里面有什么的情况下进行
+
+---
+
+## 创建与使用库
+
+静态链接时，所有的东西都被放入了这个exe文件而无需任何外部文件依赖。
+
+---
+
+## C++如何处理多返回值
+
+* 可以利用输入参数返回多类型返回值
+
+* 也可以使用数组返回。std::array或者std::vector,主要区别是array在栈上创建而vector在堆上创建因此返回array更快，当然这些方法仅对单一类型的返回值有效。
+
+* tuple（元组）
+
+  ```c++
+  #include "Engine.h"
+  #include <iostream>
+  #include <functional>
+  static std::tuple<std::string, std::string> ParseShader(const std::string & filepath)
+  {
+  	std::string vs;
+  	std::string fs;
+  	return std::make_pair(vs,fs);
+  }
+  
+  
+  int main() {
+  	std::tuple<std::string, std::string> sources = ParseShader("/Bacic.shader");
+  	std::string vs = std::get<0>(sources);//从元组里获取参数 std::get<1>(sources)
+  	std::cin.get();
+  }
+  ```
+
+* pair 
+
+和tuple的唯一区别是获取参数除了可以用std::get，还可以用sources.first
+
+* struct
+
+  
+
+  ```c++
+  #include "Engine.h"
+  #include <iostream>
+  #include <functional>
+  
+  struct SharderProgramSource
+  {
+  	std::string VertexSourse;
+  	std::string FragmentSourse;
+  };
+  static SharderProgramSource ParseShader(const std::string & filepath)
+  {
+  	std::string vs;
+  	std::string fs;
+  	return { vs,fs };//返回一个结构体
+  }
+  
+  
+  int main() {
+  	auto sources = ParseShader("/Bacic.shader");
+  	std::string vs = sources.VertexSourse;//从结构体获取元素//这种方式可以直接定位到元素的名字而不是用1、2这种容易混淆
+  	std::cin.get();
+  }
+  ```
+---
+
+## C++的模板template
+
+类似Java的泛型但是比他们厉害得多，泛型受限于类型系统而模板强大的多。
+
+模板允许你定义一个可以根据你的用途进行编译的模板，你可以让编译器基于一套规则为你写代码
+
+  ```c++
+#include <iostream>
+
+template<typename T>
+void Print(T value)
+{
+	std::cout << value << std::endl;
+}
+
+int main() {
+	Print<int>(5);
+	Print("Cherno");//编译器可以自动隐式推导出类型并填入T
+	std::cin.get();
+}
+  ```
+
+**当模板没有被调用时，函数其实并没有被创建。**
+
+编译器做的是推导类型并拷贝模板，填入到Typename的位置成为真正的函数。
+
+* 模板也可以生成类
+
+  ```c++
+  #include <iostream>
+  #include <string>
+  
+  template<typename T,int size>//可以同时传入多个模板参数
+  class Array
+  {
+  private:
+  	T m_Array[size];
+  public:
+  	int GetSize()const
+  	{
+  		return size;
+  	}
+  };
+  int main() {
+  	Array<int,5> array;
+  	std::cout << array.GetSize() << std::endl;
+  	std::cin.get();
+  }
+  ```
+
+  当你有一个可以包含不同类型的统一缓冲区时，一定程度上模板是非常有用的。
+
+---
+
+## 堆与栈内存的比较
+
+栈和堆是ram中实际存在的两个区域。
+
+fundamentally it do the same thing,the difference is how it allocate our memory
+
+栈分配：![](C:\Users\p'c\Desktop\27502_20161202113008\QQ图片20240726202817.png)
+
+我们所做的只是移动栈指针然后返回栈指针的地址。（中间的cc是在调试模式下的安全守卫防止溢出）
+
+```c++
+#include <iostream>
+#include <string>
+struct Vector3
+{
+	float x, y, z;
+	
+	Vector3()
+		:x(10), y(11), z(12)
+	{
+	}
+};
+
+int main() {
+	int value = 5;
+	int array[5];
+	array[0] = 1;
+	array[1] = 2;
+	array[2] = 3;
+	array[3] = 4;
+	array[4] = 5;
+	Vector3 vector;
+
+	int* hvalue = new int;
+	*hvalue = 5;
+	int* harray = new int[5];
+	harray[0] = 1;
+	harray[1] = 2;
+	harray[2] = 3;
+	harray[3] = 4;
+	harray[4] = 5;
+	Vector3* hvector = new Vector3();
+
+	delete hvalue;
+	delete[] harray;
+	delete hvector;
+	std::cin.get();
+}
+```
+
+堆分配：
+
+实际上调用了一个叫malloc的函数，当启动时，会得到一定数量的物理ram，然后程序会维护一个叫空闲列表的东西，它会跟踪哪块内存块是空闲的，在需要动态内存时候使用动态堆内存，返回指向那块内存的指针然后记录。
+
+如果程序需要的内存超过空闲链表的内存，程序会问操作系统寻求更多内存，而这会造成麻烦的后果，所以潜在成本巨大。
+
+**allocate memory in heap is a hole thing!!while allocate in stack is like a cpu instruction.**
+
+---
+
+## 宏
+
+预处理器来宏化代码
+
+```c++
+#include <iostream>
+#include <string>
+
+#define WAIT std::cin.get()
+int main() 
+{
+	WAIT;//不要这样使用宏！因为如果在其他代码中看见这个还需要查找定义，令人困惑
+}
+```
+
+```c++
+#include <iostream>
+#include <string>
+
+#define LOG(x) std::cout<<x<<std::endl
+int main() 
+{
+
+	LOG("Hello");
+	std::cin.get();
+
+}
+```
+
+应用场景：比如可以在relese模式下去掉日志记录而在debug中保留
+
+![QQ图片20240726213857](C:\Users\p'c\Desktop\27502_20161202113008\QQ图片20240726213857.png)
+
+```c++
+#include <iostream>
+#include <string>
+
+#if PR_DEBUG == 1
+#define LOG(x) std::cout<<x<<std::endl
+#elif defined(PR_RELEASE)
+#define LOG(x)
+#endif 
+// DEBUG模式下才会打印log信息
+
+
+int main() 
+{
+
+	LOG("Hello");
+	std::cin.get();
+
+}
+```
+
+`#if 0`和`#endif`可以用来禁用这一段宏定义
+
+可以在每一行末尾加上\（转义字符）来写多行定义的宏，注意\之后不要含有空格
+
+---
+
+## auto
+
+c++自动推导数据类型，在这里c++似乎变成了弱类型语言，同时也代表当我们对变量进行修改时，也许不一定需要修改其类型，如果使用了auto关键字的话。
+
+一方面如果改变api，客户端的auto不需要做出任何改变，但是不知道api发生了改变也有可能破坏特定类型的代码。
+
+```c++
+#include <iostream>
+#include <string>
+
+const char* GetName()
+{
+	return "Cherno";
+}
+
+int main() 
+{
+	std::string name = GetName();//auto name = GetName();则不行，因为其实包含了隐式转换,不转换成string类型则.size()无法调用
+	int a = name.size();
+	std::cin.get();
+
+}
+```
+
+然而有时候使用auto是一个好主意：
+
+```c++
+#include <iostream>
+#include <string>
+#include <vector>
+#include <unordered_map>
+
+const char* GetName()
+{
+	return "Cherno";
+}
+class Device{};
+class DeviceManager
+{
+private:
+	std::unordered_map<std::string, std::vector<Device*>> m_Devices;
+public:
+	const auto& GetDevices() const
+	{
+		return m_Devices;
+	}
+};
+int main() 
+{
+	std::vector<std::string> strings;
+	strings.push_back("apple");
+	strings.push_back("orange");
+
+	//for (std::vector<std::string>::iterator it = strings.begin(); it != strings.end(); it++)
+	for (auto it = strings.begin(); it != strings.end(); it++)//迭代器//当类型非常长时用auto可以增强可读性
+	{
+		std::cout << *it << std::endl;
+	}
+	DeviceManager dm;
+	const auto& devices = dm.GetDevices();
+	std::cin.get();
+
+}
+```
+
+**auto在c++11可以使用后置返回类型，c++14中可用于函数**
+
+---
+
+## std::array
+
